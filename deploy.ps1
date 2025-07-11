@@ -1,16 +1,55 @@
 # Azure Web App デプロイスクリプト
 param(
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$ResourceGroupName,
     
-    [Parameter(Mandatory=$true)]
+    [Parameter(Mandatory=$false)]
     [string]$WebAppName,
     
     [Parameter(Mandatory=$false)]
-    [string]$Location = "Japan East"
+    [string]$Location
 )
 
+# .envファイルから環境変数を読み込み
+if (Test-Path ".env") {
+    Get-Content ".env" | ForEach-Object {
+        if ($_ -match "^([^#][^=]+)=(.*)$") {
+            $name = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            [Environment]::SetEnvironmentVariable($name, $value, "Process")
+        }
+    }
+}
+
+# パラメータが指定されていない場合は環境変数から取得
+if (-not $ResourceGroupName) {
+    $ResourceGroupName = [Environment]::GetEnvironmentVariable("AZURE_RESOURCE_GROUP", "Process")
+    if (-not $ResourceGroupName) {
+        Write-Host "エラー: ResourceGroupNameが指定されていません。.envファイルまたはパラメータで指定してください。" -ForegroundColor Red
+        exit 1
+    }
+}
+
+if (-not $WebAppName) {
+    $WebAppName = [Environment]::GetEnvironmentVariable("AZURE_WEBAPP_NAME", "Process")
+    if (-not $WebAppName) {
+        Write-Host "エラー: WebAppNameが指定されていません。.envファイルまたはパラメータで指定してください。" -ForegroundColor Red
+        exit 1
+    }
+}
+
+if (-not $Location) {
+    $Location = [Environment]::GetEnvironmentVariable("AZURE_LOCATION", "Process")
+    if (-not $Location) {
+        $Location = "japanwest"
+    }
+}
+
 Write-Host "Azure Web App デプロイを開始します..." -ForegroundColor Green
+Write-Host "リソースグループ: $ResourceGroupName" -ForegroundColor Cyan
+Write-Host "Web App名: $WebAppName" -ForegroundColor Cyan
+Write-Host "ロケーション: $Location" -ForegroundColor Cyan
+Write-Host ""
 
 # Azure CLI がインストールされているかチェック
 if (-not (Get-Command az -ErrorAction SilentlyContinue)) {
@@ -35,11 +74,28 @@ az appservice plan create --name "$WebAppName-plan" --resource-group $ResourceGr
 
 # Web App の作成
 Write-Host "Web App を作成中..." -ForegroundColor Yellow
-az webapp create --resource-group $ResourceGroupName --plan "$WebAppName-plan" --name $WebAppName --runtime "PYTHON|3.9"
+az webapp create --resource-group $ResourceGroupName --plan "$WebAppName-plan" --name $WebAppName --runtime "PYTHON:3.11"
 
 # Python バージョンの設定
 Write-Host "Python バージョンを設定中..." -ForegroundColor Yellow
-az webapp config set --resource-group $ResourceGroupName --name $WebAppName --linux-fx-version "PYTHON|3.9"
+az webapp config set --resource-group $ResourceGroupName --name $WebAppName --linux-fx-version "PYTHON:3.11"
+
+# ZIPファイルを作成
+Write-Host "デプロイ用ZIPファイルを作成中..." -ForegroundColor Yellow
+$deployFiles = @(
+    "app.py",
+    "requirements.txt",
+    "runtime.txt",
+    "web.config"
+)
+
+# 既存のdeploy.zipを削除
+if (Test-Path "deploy.zip") {
+    Remove-Item "deploy.zip" -Force
+}
+
+# ZIPファイルを作成
+Compress-Archive -Path $deployFiles -DestinationPath "deploy.zip" -Force
 
 # デプロイ
 Write-Host "アプリケーションをデプロイ中..." -ForegroundColor Yellow
