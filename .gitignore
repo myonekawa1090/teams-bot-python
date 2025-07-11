@@ -43,5 +43,10 @@ Thumbs.db
 .bot
 local.settings.json
 
+# Environment variables
+.env
+.env.local
+.env.production
+
 # Deployment
 deploy.zip 

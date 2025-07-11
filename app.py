@@ -3,10 +3,14 @@ from aiohttp import web
 from botbuilder.core import BotFrameworkAdapterSettings, TurnContext, ActivityHandler
 from botbuilder.schema import Activity
 from botbuilder.integration.aiohttp import BotFrameworkHttpAdapter
+from dotenv import load_dotenv
+
+# .envファイルを読み込み
+load_dotenv()
 
 # Adapter設定
-APP_ID = os.environ.get("MicrosoftAppId", "")
-APP_PASSWORD = os.environ.get("MicrosoftAppPassword", "")
+APP_ID = os.getenv("MicrosoftAppId", "")
+APP_PASSWORD = os.getenv("MicrosoftAppPassword", "")
 SETTINGS = BotFrameworkAdapterSettings(APP_ID, APP_PASSWORD)
 ADAPTER = BotFrameworkHttpAdapter(SETTINGS)
 
@@ -47,5 +51,7 @@ async def health(req):
 APP.router.add_get("/health", health)
 
 if __name__ == "__main__":
-    print("Bot Emulator用のエコーBotを起動しています... http://localhost:3978/api/messages")
-    web.run_app(APP, host="localhost", port=3978) 
+    host = os.getenv("HOST", "localhost")
+    port = int(os.getenv("PORT", 3978))
+    print(f"Bot Emulator用のエコーBotを起動しています... http://{host}:{port}/api/messages")
+    web.run_app(APP, host=host, port=port) 
