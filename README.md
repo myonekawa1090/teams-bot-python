@@ -53,22 +53,14 @@ ENABLE_ORYX_BUILD=false
 STARTUP_COMMAND="python3 -m pip install -r requirements.txt && python3 app.py"
 ```
 
-#### 問題5: 仮想環境の問題
+#### 問題6. startup コマンドを Portal から手動で設定する必要があった
+startup.txt は機能しなかったので、下記コマンドを Portal -> Configuration -> Startup Command に入れる必要があった。
+```bash
+python3 -m pip install -r requirements.txt && python3 app.py
 ```
-The virtual environment was not created successfully because ensurepip is not available
-```
-**解決**: `startup.txt`を使用してシステム全体に依存関係をインストール
 
-### 最終的な解決方法
+az command でできるかどうかは要確認
 
-#### 1. アプリケーション設定
-```powershell
-az webapp config appsettings set --resource-group $ResourceGroupName --name $WebAppName --settings `
-    SCM_DO_BUILD_DURING_DEPLOYMENT=true `
-    ENABLE_ORYX_BUILD=false `
-    PYTHON_VERSION=3.11 `
-    STARTUP_COMMAND="python3 -m pip install -r requirements.txt && python3 app.py"
-```
 
 #### 2. ファイル構成
 ```
