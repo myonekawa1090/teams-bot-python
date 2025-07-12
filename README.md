@@ -190,10 +190,69 @@ Bot Emulatorで `http://localhost:3978/api/messages` に接続してテストで
 - `ENABLE_ORYX_BUILD=false`が設定されているか確認
 - `startup.txt`が存在するか確認
 
+#### 4. 認証エラー（NEW）
+```
+Failed to get access token with error: invalid_client
+AADSTS7000216: 'client_assertion', 'client_secret' or 'request' is required
+```
+
+**原因**: Bot Framework認証が正しく設定されていない
+
+**解決方法**:
+1. **System Managed Identity使用（推奨）**:
+   ```bash
+   # Azure Web AppでSystem Managed Identityを有効化
+   az webapp identity assign --name <webapp-name> --resource-group <resource-group>
+   
+   # 環境変数設定
+   MicrosoftAppId=<your-bot-app-id>
+   # MicrosoftAppPassword は設定しない
+   # ManagedIdentityClientId は設定しない
+   ```
+
+2. **User Assigned Managed Identity使用**:
+   ```bash
+   # 環境変数設定
+   MicrosoftAppId=<your-bot-app-id>
+   ManagedIdentityClientId=<managed-identity-client-id>
+   # MicrosoftAppPassword は設定しない
+   ```
+
+3. **Client Secret認証使用**:
+   ```bash
+   # 環境変数設定
+   MicrosoftAppId=<your-bot-app-id>
+   MicrosoftAppPassword=<your-bot-app-password>
+   # ManagedIdentityClientId は設定しない
+   ```
+
+**診断方法**:
+```bash
+# 診断スクリプトの実行
+python diagnose.py
+
+# ヘルスチェックで認証設定確認
+curl https://your-bot-app.azurewebsites.net/health
+```
+
+## 認証設定の診断
+
+認証問題を診断するために、`diagnose.py`スクリプトを使用できます:
+
+```bash
+python diagnose.py
+```
+
+このスクリプトは以下を確認します:
+- 環境変数の設定状況
+- 認証方式の決定
+- 実際のトークン取得テスト
+- 推奨設定の表示
+
 ## 次のステップ
 
 - [ ] Azure Boards連携機能追加
 - [ ] より高度な会話機能実装
-- [ ] 認証機能追加
+- [ ] 認証機能強化
 - [ ] ログ機能強化
 - [ ] CI/CDパイプライン構築 

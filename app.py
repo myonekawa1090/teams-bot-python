@@ -1,28 +1,49 @@
 import os
+import logging
+import traceback
 from aiohttp import web
 from botbuilder.core import BotFrameworkAdapterSettings, TurnContext, ActivityHandler
 from botbuilder.schema import Activity
 from botbuilder.integration.aiohttp import BotFrameworkHttpAdapter
 from dotenv import load_dotenv
+from azure.identity.aio import ManagedIdentityCredential
+
+# ログ設定
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 
 # .envファイルを読み込み
 load_dotenv()
 
 # Adapter設定 (User Assigned Managed Identity使用)
 APP_ID = os.getenv("MicrosoftAppId", "")
-# User Assigned Managed Identity使用時はAppPassword不要
-SETTINGS = BotFrameworkAdapterSettings(APP_ID, "")
+MANAGED_ID_CLIENT_ID = os.getenv("ManagedIdentityClientId", "")
+
+logging.info(f"[Startup] MicrosoftAppId(APP_ID): {APP_ID}")
+logging.info(f"[Startup] ManagedIdentityClientId: {MANAGED_ID_CLIENT_ID}")
+
+# UAMIのクレデンシャルを利用
+credential = ManagedIdentityCredential(client_id=MANAGED_ID_CLIENT_ID) if MANAGED_ID_CLIENT_ID else None
+SETTINGS = BotFrameworkAdapterSettings(APP_ID, "", credential=credential)
 ADAPTER = BotFrameworkHttpAdapter(SETTINGS)
 
 # エラーハンドラー
 async def on_error(context: TurnContext, error: Exception):
-    print(f"[on_turn_error]: {error}")
-    await context.send_activity("エラーが発生しました。もう一度お試しください。")
+    logging.error(f"[on_turn_error]: {error}")
+    logging.error(traceback.format_exc())
+    try:
+        await context.send_activity("エラーが発生しました。もう一度お試しください。")
+    except Exception as e:
+        logging.error(f"[on_turn_error][send_activity]: {e}")
+        logging.error(traceback.format_exc())
 ADAPTER.on_turn_error = on_error
 
 # エコーBot
 class EchoBot(ActivityHandler):
     async def on_message_activity(self, turn_context: TurnContext):
+        logging.info(f"on_message_activity: {turn_context.activity}")
         await turn_context.send_activity(f"Echo: {turn_context.activity.text}")
     async def on_members_added_activity(self, members_added, turn_context: TurnContext):
         for member in members_added:
@@ -33,13 +54,21 @@ BOT = EchoBot()
 
 # メッセージエンドポイント
 async def messages(req: web.Request) -> web.Response:
-    body = await req.json()
-    activity = Activity().deserialize(body)
-    auth_header = req.headers.get("Authorization", "")
-    response = await ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
-    if response:
-        return web.json_response(data=response.body, status=response.status)
-    return web.Response(status=201)
+    try:
+        body = await req.json()
+        logging.info(f"/api/messages request body: {body}")
+        activity = Activity().deserialize(body)
+        auth_header = req.headers.get("Authorization", "")
+        logging.info(f"/api/messages headers: {dict(req.headers)}")
+        response = await ADAPTER.process_activity(activity, auth_header, BOT.on_turn)
+        if response:
+            logging.info(f"/api/messages response: {response.body}")
+            return web.json_response(data=response.body, status=response.status)
+        return web.json_response(data={"id": activity.id}, status=201)
+    except Exception as e:
+        logging.error(f"/api/messages error: {e}")
+        logging.error(traceback.format_exc())
+        return web.Response(text="Internal Server Error", status=500)
 
 # アプリケーション設定
 APP = web.Application()
@@ -115,5 +144,5 @@ APP.router.add_get("/", root)
 if __name__ == "__main__":
     host = os.getenv("HOST", "0.0.0.0")  # Azure Web Appsでは0.0.0.0を使用
     port = int(os.getenv("PORT", 8000))  # Azure Web Appsのデフォルトポート
-    print(f"Bot Emulator用のエコーBotを起動しています... http://{host}:{port}/api/messages")
+    logging.info(f"Bot Emulator用のエコーBotを起動しています... http://{host}:{port}/api/messages")
     web.run_app(APP, host=host, port=port) 
